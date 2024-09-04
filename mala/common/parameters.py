@@ -1,4 +1,5 @@
 """Collection of all parameter related classes and functions."""
+
 import importlib
 import inspect
 import json
@@ -6,16 +7,19 @@ import os
 import pickle
 from time import sleep
 
-try:
-    import horovod.torch as hvd
-except ModuleNotFoundError:
-    pass
 import numpy as np
 import torch
+import torch.distributed as dist
 
-from mala.common.parallelizer import printout, set_horovod_status, \
-    set_mpi_status, get_rank, get_local_rank, set_current_verbosity, \
-    parallel_warn
+from mala.common.parallelizer import (
+    printout,
+    set_ddp_status,
+    set_mpi_status,
+    get_rank,
+    get_local_rank,
+    set_current_verbosity,
+    parallel_warn,
+)
 from mala.common.json_serializable import JSONSerializable
 
 DEFAULT_NP_DATA_DTYPE = np.float32
@@ -24,11 +28,19 @@ DEFAULT_NP_DATA_DTYPE = np.float32
 class ParametersBase(JSONSerializable):
     """Base parameter class for MALA."""
 
-    def __init__(self,):
+    def __init__(
+        self,
+    ):
         super(ParametersBase, self).__init__()
-        self._configuration = {"gpu": False, "horovod": False, "mpi": False,
-                               "device": "cpu", "openpmd_configuration": {},
-                               "openpmd_granularity": 1}
+        self._configuration = {
+            "gpu": False,
+            "ddp": False,
+            "mpi": False,
+            "device": "cpu",
+            "openpmd_configuration": {},
+            "openpmd_granularity": 1,
+            "lammps": True,
+        }
         pass
 
     def show(self, indent=""):
@@ -45,17 +57,21 @@ class ParametersBase(JSONSerializable):
         for v in vars(self):
             if v != "_configuration":
                 if v[0] == "_":
-                    printout(indent + '%-15s: %s' % (v[1:], getattr(self, v)),
-                             min_verbosity=0)
+                    printout(
+                        indent + "%-15s: %s" % (v[1:], getattr(self, v)),
+                        min_verbosity=0,
+                    )
                 else:
-                    printout(indent + '%-15s: %s' % (v, getattr(self, v)),
-                             min_verbosity=0)
+                    printout(
+                        indent + "%-15s: %s" % (v, getattr(self, v)),
+                        min_verbosity=0,
+                    )
 
     def _update_gpu(self, new_gpu):
         self._configuration["gpu"] = new_gpu
 
-    def _update_horovod(self, new_horovod):
-        self._configuration["horovod"] = new_horovod
+    def _update_ddp(self, new_ddp):
+        self._configuration["ddp"] = new_ddp
 
     def _update_mpi(self, new_mpi):
         self._configuration["mpi"] = new_mpi
@@ -68,6 +84,9 @@ class ParametersBase(JSONSerializable):
 
     def _update_openpmd_granularity(self, new_granularity):
         self._configuration["openpmd_granularity"] = new_granularity
+
+    def _update_lammps(self, new_lammps):
+        self._configuration["lammps"] = new_lammps
 
     @staticmethod
     def _member_to_json(member):
@@ -87,8 +106,9 @@ class ParametersBase(JSONSerializable):
 
         """
         json_dict = {}
-        members = inspect.getmembers(self,
-                                     lambda a: not (inspect.isroutine(a)))
+        members = inspect.getmembers(
+            self, lambda a: not (inspect.isroutine(a))
+        )
         for member in members:
             # Filter out all private members, builtins, etc.
             if member[0][0] != "_":
@@ -136,8 +156,9 @@ class ParametersBase(JSONSerializable):
             else:
                 # If it is not an elementary builtin type AND not an object
                 # dictionary, something is definitely off.
-                raise Exception("Could not decode JSON file, error in",
-                                json_value)
+                raise Exception(
+                    "Could not decode JSON file, error in", json_value
+                )
 
     @classmethod
     def from_json(cls, json_dict):
@@ -168,8 +189,9 @@ class ParametersBase(JSONSerializable):
                     if len(json_dict[key]) > 0:
                         _member = []
                         for m in json_dict[key]:
-                            _member.append(deserialized_object.
-                                           _json_to_member(m))
+                            _member.append(
+                                deserialized_object._json_to_member(m)
+                            )
                         setattr(deserialized_object, key, _member)
                     else:
                         setattr(deserialized_object, key, json_dict[key])
@@ -178,16 +200,20 @@ class ParametersBase(JSONSerializable):
                     if len(json_dict[key]) > 0:
                         _member = {}
                         for m in json_dict[key].keys():
-                            _member[m] = deserialized_object.\
-                                _json_to_member(json_dict[key][m])
+                            _member[m] = deserialized_object._json_to_member(
+                                json_dict[key][m]
+                            )
                         setattr(deserialized_object, key, _member)
 
                     else:
                         setattr(deserialized_object, key, json_dict[key])
 
                 else:
-                    setattr(deserialized_object, key, deserialized_object.
-                            _json_to_member(json_dict[key]))
+                    setattr(
+                        deserialized_object,
+                        key,
+                        deserialized_object._json_to_member(json_dict[key]),
+                    )
         return deserialized_object
 
 
@@ -338,6 +364,35 @@ class ParametersDescriptors(ParametersBase):
         self.minterpy_cutoff_cube_size = 0.0
         self.minterpy_polynomial_degree = 4
         self.minterpy_lp_norm = 2
+
+        # ace descriptors
+        self.ace_elements = ["Al", "G"]
+        self.ace_mumax = len(self.ace_elements)
+        self.ace_ranks = [1, 2, 3]
+        self.ace_nmax = [6, 2, 2]
+        self.ace_lmax = [0, 2, 2]
+        self.ace_nradbase = max(self.ace_nmax)
+        self.ace_lmin = [0, 0, 0]
+        self.ace_reference_ens = [0.0, 0.0]
+
+        self.ace_nshell = 2.0
+        self.ace_apply_shift = False
+        self.ace_metal_max = True
+        self.ace_use_vdw = False
+
+        self.ace_L_R = 0
+        self.ace_M_R = 0
+
+        self.ace_coupling_type = "cg"
+        self.ace_lmax_traditional = 12
+        
+        # TODO: add consistency check for these
+        # if grid_filter, types_like_snap must be False
+        # if grid_filter, padfunc must be True
+        self.ace_grid_filter = True
+        self.ace_types_like_snap = False
+        self.ace_padfunc = True
+
 
     @property
     def use_z_splitting(self):
@@ -655,10 +710,6 @@ class ParametersRunning(ParametersBase):
         validation loss has to plateau before the schedule takes effect).
         Default: 0.
 
-    use_compression : bool
-        If True and horovod is used, horovod compression will be used for
-        allreduce communication. This can improve performance.
-
     num_workers : int
         Number of workers to be used for data loading.
 
@@ -719,7 +770,6 @@ class ParametersRunning(ParametersBase):
         self.learning_rate_scheduler = None
         self.learning_rate_decay = 0.1
         self.learning_rate_patience = 0
-        self.use_compression = False
         self.num_workers = 0
         self.use_shuffling_for_samplers = True
         self.checkpoints_each_epoch = 0
@@ -733,10 +783,10 @@ class ParametersRunning(ParametersBase):
         self.use_mixed_precision = False
         self.use_graphs = False
         self.training_report_frequency = 1000
-        self.profiler_range = [1000, 2000]
+        self.profiler_range = None  # [1000, 2000]
 
-    def _update_horovod(self, new_horovod):
-        super(ParametersRunning, self)._update_horovod(new_horovod)
+    def _update_ddp(self, new_ddp):
+        super(ParametersRunning, self)._update_ddp(new_ddp)
         self.during_training_metric = self.during_training_metric
         self.after_before_training_metric = self.after_before_training_metric
 
@@ -758,9 +808,11 @@ class ParametersRunning(ParametersBase):
     @during_training_metric.setter
     def during_training_metric(self, value):
         if value != "ldos":
-            if self._configuration["horovod"]:
-                raise Exception("Currently, MALA can only operate with the "
-                                "\"ldos\" metric for horovod runs.")
+            if self._configuration["ddp"]:
+                raise Exception(
+                    "Currently, MALA can only operate with the "
+                    '"ldos" metric for ddp runs.'
+                )
         self._during_training_metric = value
 
     @property
@@ -781,17 +833,21 @@ class ParametersRunning(ParametersBase):
     @after_before_training_metric.setter
     def after_before_training_metric(self, value):
         if value != "ldos":
-            if self._configuration["horovod"]:
-                raise Exception("Currently, MALA can only operate with the "
-                                "\"ldos\" metric for horovod runs.")
+            if self._configuration["ddp"]:
+                raise Exception(
+                    "Currently, MALA can only operate with the "
+                    '"ldos" metric for ddp runs.'
+                )
         self._after_before_training_metric = value
 
     @during_training_metric.setter
     def during_training_metric(self, value):
         if value != "ldos":
-            if self._configuration["horovod"]:
-                raise Exception("Currently, MALA can only operate with the "
-                                "\"ldos\" metric for horovod runs.")
+            if self._configuration["ddp"]:
+                raise Exception(
+                    "Currently, MALA can only operate with the "
+                    '"ldos" metric for ddp runs.'
+                )
         self._during_training_metric = value
 
     @property
@@ -807,14 +863,18 @@ class ParametersRunning(ParametersBase):
     @use_graphs.setter
     def use_graphs(self, value):
         if value is True:
-            if self._configuration["gpu"] is False or \
-                    torch.version.cuda is None:
+            if (
+                self._configuration["gpu"] is False
+                or torch.version.cuda is None
+            ):
                 parallel_warn("No CUDA or GPU found, cannot use CUDA graphs.")
                 value = False
             else:
                 if float(torch.version.cuda) < 11.0:
-                    raise Exception("Cannot use CUDA graphs with a CUDA"
-                                    " version below 11.0")
+                    raise Exception(
+                        "Cannot use CUDA graphs with a CUDA"
+                        " version below 11.0"
+                    )
         self._use_graphs = value
 
 
@@ -950,7 +1010,7 @@ class ParametersHyperparameterOptimization(ParametersBase):
 
     def __init__(self):
         super(ParametersHyperparameterOptimization, self).__init__()
-        self.direction = 'minimize'
+        self.direction = "minimize"
         self.n_trials = 100
         self.hlist = []
         self.hyper_opt_method = "optuna"
@@ -1030,18 +1090,24 @@ class ParametersHyperparameterOptimization(ParametersBase):
             if v != "_configuration":
                 if v != "hlist":
                     if v[0] == "_":
-                        printout(indent + '%-15s: %s' %
-                                 (v[1:], getattr(self, v)), min_verbosity=0)
+                        printout(
+                            indent + "%-15s: %s" % (v[1:], getattr(self, v)),
+                            min_verbosity=0,
+                        )
                     else:
                         printout(
-                            indent + '%-15s: %s' % (v, getattr(self, v)),
-                            min_verbosity=0)
+                            indent + "%-15s: %s" % (v, getattr(self, v)),
+                            min_verbosity=0,
+                        )
                 if v == "hlist":
                     i = 0
                     for hyp in self.hlist:
-                        printout(indent + '%-15s: %s' %
-                                 ("hyperparameter #"+str(i), hyp.name),
-                                 min_verbosity=0)
+                        printout(
+                            indent
+                            + "%-15s: %s"
+                            % ("hyperparameter #" + str(i), hyp.name),
+                            min_verbosity=0,
+                        )
                         i += 1
 
 
@@ -1068,6 +1134,17 @@ class ParametersDataGeneration(ParametersBase):
         For this, we need to provide the fraction of the trajectory (counted
         from the end). Usually, 10% is a fine assumption. This value usually
         does not need to be changed.
+
+    trajectory_analysis_correlation_metric_cutoff : float
+        Cutoff value to be used when sampling uncorrelated snapshots
+        during trajectory analysis. If negative, a value will be determined
+        numerically. This value is a cutoff for the minimum euclidean distance
+        between any two ions in two subsequent ionic configurations.
+
+    trajectory_analysis_temperature_tolerance_percent : float
+        Maximum deviation of temperature between snapshot and desired
+        temperature for snapshot to be considered for DFT calculation
+        (in percent)
 
     local_psp_path : string
         Path to where the local pseudopotential is stored (for OF-DFT-MD).
@@ -1096,6 +1173,8 @@ class ParametersDataGeneration(ParametersBase):
         self.trajectory_analysis_denoising_width = 100
         self.trajectory_analysis_below_average_counter = 50
         self.trajectory_analysis_estimated_equilibrium = 0.1
+        self.trajectory_analysis_correlation_metric_cutoff = -0.1
+        self.trajectory_analysis_temperature_tolerance_percent = 1
         self.local_psp_path = None
         self.local_psp_name = None
         self.ofdft_timestep = 0
@@ -1158,7 +1237,7 @@ class Parameters:
 
         # Properties
         self.use_gpu = False
-        self.use_horovod = False
+        self.use_ddp = False
         self.use_mpi = False
         self.verbosity = 1
         self.device = "cpu"
@@ -1166,6 +1245,7 @@ class Parameters:
         # TODO: Maybe as a percentage? Feature dimensions can be quite
         # different.
         self.openpmd_granularity = 1
+        self.use_lammps = True
 
     @property
     def openpmd_granularity(self):
@@ -1191,7 +1271,9 @@ class Parameters:
         self.targets._update_openpmd_granularity(self._openpmd_granularity)
         self.data._update_openpmd_granularity(self._openpmd_granularity)
         self.running._update_openpmd_granularity(self._openpmd_granularity)
-        self.hyperparameters._update_openpmd_granularity(self._openpmd_granularity)
+        self.hyperparameters._update_openpmd_granularity(
+            self._openpmd_granularity
+        )
 
     @property
     def verbosity(self):
@@ -1226,8 +1308,10 @@ class Parameters:
             if torch.cuda.is_available():
                 self._use_gpu = True
             else:
-                parallel_warn("GPU requested, but no GPU found. MALA will "
-                              "operate with CPU only.")
+                parallel_warn(
+                    "GPU requested, but no GPU found. MALA will "
+                    "operate with CPU only."
+                )
 
         # Invalidate, will be updated in setter.
         self.device = None
@@ -1239,25 +1323,36 @@ class Parameters:
         self.hyperparameters._update_gpu(self.use_gpu)
 
     @property
-    def use_horovod(self):
-        """Control whether or not horovod is used for parallel training."""
-        return self._use_horovod
+    def use_ddp(self):
+        """Control whether or not dd is used for parallel training."""
+        return self._use_ddp
 
-    @use_horovod.setter
-    def use_horovod(self, value):
+    @use_ddp.setter
+    def use_ddp(self, value):
         if value:
-            hvd.init()
+            if self.verbosity > 1:
+                print("Initializing torch.distributed.")
+            # JOSHR:
+            # We start up torch distributed here. As is fairly standard
+            # convention, we get the rank and world size arguments via
+            # environment variables (RANK, WORLD_SIZE). In addition to
+            # those variables, LOCAL_RANK, MASTER_ADDR and MASTER_PORT
+            # should be set.
+            rank = int(os.environ.get("RANK"))
+            world_size = int(os.environ.get("WORLD_SIZE"))
 
+            dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+        set_ddp_status(value)
         # Invalidate, will be updated in setter.
-        set_horovod_status(value)
         self.device = None
-        self._use_horovod = value
-        self.network._update_horovod(self.use_horovod)
-        self.descriptors._update_horovod(self.use_horovod)
-        self.targets._update_horovod(self.use_horovod)
-        self.data._update_horovod(self.use_horovod)
-        self.running._update_horovod(self.use_horovod)
-        self.hyperparameters._update_horovod(self.use_horovod)
+        self._use_ddp = value
+        self.network._update_ddp(self.use_ddp)
+        self.descriptors._update_ddp(self.use_ddp)
+        self.targets._update_ddp(self.use_ddp)
+        self.data._update_ddp(self.use_ddp)
+        self.running._update_ddp(self.use_ddp)
+        self.hyperparameters._update_ddp(self.use_ddp)
 
     @property
     def device(self):
@@ -1268,8 +1363,7 @@ class Parameters:
     def device(self, value):
         device_id = get_local_rank()
         if self.use_gpu:
-            self._device = "cuda:"\
-                           f"{device_id}"
+            self._device = "cuda:" f"{device_id}"
         else:
             self._device = "cpu"
         self.network._update_device(self._device)
@@ -1281,12 +1375,13 @@ class Parameters:
 
     @property
     def use_mpi(self):
-        """Control whether or not horovod is used for parallel training."""
+        """Control whether or not MPI is used for paralle inference."""
         return self._use_mpi
 
     @use_mpi.setter
     def use_mpi(self, value):
         set_mpi_status(value)
+
         # Invalidate, will be updated in setter.
         self.device = None
         self._use_mpi = value
@@ -1311,19 +1406,37 @@ class Parameters:
     @openpmd_configuration.setter
     def openpmd_configuration(self, value):
         self._openpmd_configuration = value
-
-        # Invalidate, will be updated in setter.
         self.network._update_openpmd_configuration(self.openpmd_configuration)
-        self.descriptors._update_openpmd_configuration(self.openpmd_configuration)
+        self.descriptors._update_openpmd_configuration(
+            self.openpmd_configuration
+        )
         self.targets._update_openpmd_configuration(self.openpmd_configuration)
         self.data._update_openpmd_configuration(self.openpmd_configuration)
         self.running._update_openpmd_configuration(self.openpmd_configuration)
-        self.hyperparameters._update_openpmd_configuration(self.openpmd_configuration)
+        self.hyperparameters._update_openpmd_configuration(
+            self.openpmd_configuration
+        )
+
+    @property
+    def use_lammps(self):
+        """Control whether or not to use LAMMPS for descriptor calculation."""
+        return self._use_lammps
+
+    @use_lammps.setter
+    def use_lammps(self, value):
+        self._use_lammps = value
+        self.network._update_lammps(self.use_lammps)
+        self.descriptors._update_lammps(self.use_lammps)
+        self.targets._update_lammps(self.use_lammps)
+        self.data._update_lammps(self.use_lammps)
+        self.running._update_lammps(self.use_lammps)
+        self.hyperparameters._update_lammps(self.use_lammps)
 
     def show(self):
         """Print name and values of all attributes of this object."""
-        printout("--- " + self.__doc__.split("\n")[1] + " ---",
-                 min_verbosity=0)
+        printout(
+            "--- " + self.__doc__.split("\n")[1] + " ---", min_verbosity=0
+        )
 
         # Two for-statements so that global parameters are shown on top.
         for v in vars(self):
@@ -1331,16 +1444,21 @@ class Parameters:
                 pass
             else:
                 if v[0] == "_":
-                    printout('%-15s: %s' % (v[1:], getattr(self, v)),
-                             min_verbosity=0)
+                    printout(
+                        "%-15s: %s" % (v[1:], getattr(self, v)),
+                        min_verbosity=0,
+                    )
                 else:
-                    printout('%-15s: %s' % (v, getattr(self, v)),
-                             min_verbosity=0)
+                    printout(
+                        "%-15s: %s" % (v, getattr(self, v)), min_verbosity=0
+                    )
         for v in vars(self):
             if isinstance(getattr(self, v), ParametersBase):
                 parobject = getattr(self, v)
-                printout("--- " + parobject.__doc__.split("\n")[1] + " ---",
-                         min_verbosity=0)
+                printout(
+                    "--- " + parobject.__doc__.split("\n")[1] + " ---",
+                    min_verbosity=0,
+                )
                 parobject.show("\t")
 
     def save(self, filename, save_format="json"):
@@ -1363,14 +1481,15 @@ class Parameters:
         if save_format == "pickle":
             if filename[-3:] != "pkl":
                 filename += ".pkl"
-            with open(filename, 'wb') as handle:
+            with open(filename, "wb") as handle:
                 pickle.dump(self, handle, protocol=4)
         elif save_format == "json":
             if filename[-4:] != "json":
                 filename += ".json"
             json_dict = {}
-            members = inspect.getmembers(self,
-                                         lambda a: not (inspect.isroutine(a)))
+            members = inspect.getmembers(
+                self, lambda a: not (inspect.isroutine(a))
+            )
 
             # Two for loops so global properties enter the dict first.
             for member in members:
@@ -1442,7 +1561,7 @@ class Parameters:
         self.use_gpu = True
         self.use_mpi = True
         device_temp = self.device
-        sleep(get_rank()*wait_time)
+        sleep(get_rank() * wait_time)
 
         # Now we can turn of MPI and set the device manually.
         self.use_mpi = False
@@ -1455,8 +1574,9 @@ class Parameters:
         self.hyperparameters._update_device(device_temp)
 
     @classmethod
-    def load_from_file(cls, file, save_format="json",
-                       no_snapshots=False):
+    def load_from_file(
+        cls, file, save_format="json", no_snapshots=False, force_no_ddp=False
+    ):
         """
         Load a Parameters object from a file.
 
@@ -1481,7 +1601,7 @@ class Parameters:
         """
         if save_format == "pickle":
             if isinstance(file, str):
-                loaded_parameters = pickle.load(open(file, 'rb'))
+                loaded_parameters = pickle.load(open(file, "rb"))
             else:
                 loaded_parameters = pickle.load(file)
             if no_snapshots is True:
@@ -1494,20 +1614,27 @@ class Parameters:
 
             loaded_parameters = cls()
             for key in json_dict:
-                if isinstance(json_dict[key], dict) and key \
-                        != "openpmd_configuration":
+                if (
+                    isinstance(json_dict[key], dict)
+                    and key != "openpmd_configuration"
+                ):
                     # These are the other parameter classes.
-                    sub_parameters =\
-                        globals()[json_dict[key]["_parameters_type"]].\
-                        from_json(json_dict[key])
+                    sub_parameters = globals()[
+                        json_dict[key]["_parameters_type"]
+                    ].from_json(json_dict[key])
                     setattr(loaded_parameters, key, sub_parameters)
 
             # We iterate a second time, to set global values, so that they
             # are properly forwarded.
             for key in json_dict:
-                if not isinstance(json_dict[key], dict) or key == \
-                        "openpmd_configuration":
-                    setattr(loaded_parameters, key, json_dict[key])
+                if (
+                    not isinstance(json_dict[key], dict)
+                    or key == "openpmd_configuration"
+                ):
+                    if key == "use_ddp" and force_no_ddp is True:
+                        setattr(loaded_parameters, key, False)
+                    else:
+                        setattr(loaded_parameters, key, json_dict[key])
             if no_snapshots is True:
                 loaded_parameters.data.snapshot_directories_list = []
         else:
@@ -1535,11 +1662,12 @@ class Parameters:
             The loaded Parameters object.
 
         """
-        return Parameters.load_from_file(file, save_format="pickle",
-                                         no_snapshots=no_snapshots)
+        return Parameters.load_from_file(
+            file, save_format="pickle", no_snapshots=no_snapshots
+        )
 
     @classmethod
-    def load_from_json(cls, file, no_snapshots=False):
+    def load_from_json(cls, file, no_snapshots=False, force_no_ddp=False):
         """
         Load a Parameters object from a json file.
 
@@ -1558,5 +1686,9 @@ class Parameters:
             The loaded Parameters object.
 
         """
-        return Parameters.load_from_file(file, save_format="json",
-                                         no_snapshots=no_snapshots)
+        return Parameters.load_from_file(
+            file,
+            save_format="json",
+            no_snapshots=no_snapshots,
+            force_no_ddp=force_no_ddp,
+        )
