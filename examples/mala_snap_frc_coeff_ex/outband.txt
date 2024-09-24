@@ -1,0 +1,48 @@
+/home/jmgoff/Software/mala_frc_combine/examples/snap_frc/ex19_atomic_forces.py:78: RuntimeWarning: divide by zero encountered in divide
+  print(mala_forces[0, :] / np.array(numerical_forces))
+/home/jmgoff/Software/mala_frc_combine/examples/snap_frc/ex19_atomic_forces.py:79: RuntimeWarning: divide by zero encountered in divide
+  print(mala_forces[2000, :] / np.array(numerical_forces))
+/home/jmgoff/Software/mala_frc_combine/examples/snap_frc/ex19_atomic_forces.py:80: RuntimeWarning: divide by zero encountered in divide
+  print(mala_forces[4000, :] / np.array(numerical_forces))
+array_np has nan False
+array_np has inf False False
+torch.Size([8748, 91]) torch.Size([1, 91])
+Had to readjust batch size from 40 to 54
+internal fermi 10.245183903513034
+internal fermi 10.245183918619029
+internal fermi 10.24518390351302
+internal fermi 10.245183918619038
+internal fermi 10.24518390351302
+internal fermi 10.245183918619045
+internal fermi 10.245183903513034
+internal fermi 10.245183918619023
+internal fermi 10.245183903513034
+internal fermi 10.245183918619038
+internal fermi 10.24518390351302
+internal fermi 10.245183918619027
+internal fermi 10.245183906586433
+internal fermi 10.245183915545624
+internal fermi 10.245183911028374
+internal fermi 10.245183911103688
+internal fermi 10.245183911066032
+internal fermi 10.245183911066032
+internal fermi 10.245183911066029
+internal fermi 10.245183911066032
+internal fermi 10.245183911066036
+internal fermi 10.245183911066032
+FORCE TEST: Band energy contribution.
+[9.99999251e-01 9.99999213e-01 9.99998079e-01 1.00000038e+00
+ 9.99997975e-01 9.99997779e-01 1.00001234e+00 1.00227113e+00
+           -inf 1.36218636e-09 1.14423654e-08]
+[9.99999251e-01 9.99999213e-01 9.99998079e-01 1.00000038e+00
+ 9.99997975e-01 9.99997779e-01 1.00001234e+00 1.00227113e+00
+           -inf 1.36218636e-09 1.14423654e-08]
+[9.99999251e-01 9.99999213e-01 9.99998079e-01 1.00000038e+00
+ 9.99997975e-01 9.99997779e-01 1.00001234e+00 1.00227113e+00
+           -inf 1.36218636e-09 1.14423654e-08]
+array_np has nan False
+array_np has inf False False
+torch.Size([8748, 91]) torch.Size([1, 91])
+Had to readjust batch size from 40 to 54
+FORCE TEST: Backpropagation machinery.
+torch.Size([8748, 91])
