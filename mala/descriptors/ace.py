@@ -3,6 +3,7 @@
 import os
 import itertools
 import sys
+import pickle
 
 import ase
 import ase.io
@@ -364,6 +365,7 @@ class ACE(Descriptor):
         # What that is differs depending on serial/parallel execution.
         if self.parameters.lammps_compute_file == "":
             filepath = __file__.split("ace")[0]
+            print('filepath in ace desc script',filepath)
             if self.parameters._configuration["mpi"]:
                 if self.parameters.use_z_splitting:
                     self.parameters.lammps_compute_file = os.path.join(
@@ -377,8 +379,8 @@ class ACE(Descriptor):
                 self.parameters.lammps_compute_file = os.path.join(
                     filepath, "in.acegrid.python"
                 )
-
         # Do the LAMMPS calculation and clean up.
+        print('file %s' % self.parameters.lammps_compute_file)
         lmp.file(self.parameters.lammps_compute_file)
 
         # Set things not accessible from LAMMPS
@@ -804,46 +806,59 @@ class ACE(Descriptor):
 
     def init_wigner_3j(self, lmax):
         # returns dictionary of all cg coefficients to be used at a given value of lmax
-        cg = {}
-        for l1 in range(lmax + 1):
-            for l2 in range(lmax + 1):
-                for l3 in range(lmax + 1):
-                    for m1 in range(-l1, l1 + 1):
-                        for m2 in range(-l2, l2 + 1):
-                            for m3 in range(-l3, l3 + 1):
-                                key = "%d,%d,%d,%d,%d,%d" % (
-                                    l1,
-                                    m1,
-                                    l2,
-                                    m2,
-                                    l3,
-                                    m3,
-                                )
-                                cg[key] = self.wigner_3j(
-                                    l1, m1, l2, m2, l3, m3
-                                )
+        try:
+            with open('wig.pkl','rb') as readinwig:
+                cg = pickle.load(readinwig)
+        except FileNotFoundError:
+            cg = {}
+            for l1 in range(lmax + 1):
+                for l2 in range(lmax + 1):
+                    for l3 in range(lmax + 1):
+                        for m1 in range(-l1, l1 + 1):
+                            for m2 in range(-l2, l2 + 1):
+                                for m3 in range(-l3, l3 + 1):
+                                    key = "%d,%d,%d,%d,%d,%d" % (
+                                        l1,
+                                        m1,
+                                        l2,
+                                        m2,
+                                        l3,
+                                        m3,
+                                    )
+                                    cg[key] = self.wigner_3j(
+                                        l1, m1, l2, m2, l3, m3
+                                    )
+            with open('wig.pkl','wb') as writewig:
+                pickle.dump(cg,writewig)
         return cg
 
     def init_clebsch_gordan(self, lmax):
         # returns dictionary of all cg coefficients to be used at a given value of lmax
-        cg = {}
-        for l1 in range(lmax + 1):
-            for l2 in range(lmax + 1):
-                for l3 in range(lmax + 1):
-                    for m1 in range(-l1, l1 + 1):
-                        for m2 in range(-l2, l2 + 1):
-                            for m3 in range(-l3, l3 + 1):
-                                key = "%d,%d,%d,%d,%d,%d" % (
-                                    l1,
-                                    m1,
-                                    l2,
-                                    m2,
-                                    l3,
-                                    m3,
-                                )
-                                cg[key] = self.clebsch_gordan(
-                                    l1, m1, l2, m2, l3, m3
-                                )
+        try:
+            with open('cg.pkl','rb') as readincg:
+                cg = pickle.load(readincg)
+        except FileNotFoundError:
+            cg = {}
+            for l1 in range(lmax + 1):
+                for l2 in range(lmax + 1):
+                    for l3 in range(lmax + 1):
+                        for m1 in range(-l1, l1 + 1):
+                            for m2 in range(-l2, l2 + 1):
+                                for m3 in range(-l3, l3 + 1):
+                                    key = "%d,%d,%d,%d,%d,%d" % (
+                                        l1,
+                                        m1,
+                                        l2,
+                                        m2,
+                                        l3,
+                                        m3,
+                                    )
+                                    cg[key] = self.clebsch_gordan(
+                                        l1, m1, l2, m2, l3, m3
+                                    )
+            with open('cg.pkl','wb') as writecg:
+                pickle.dump(cg, writecg)
+            #pickle.dump(cg,'cg.pkl')
         return cg
 
     def clebsch_gordan(self, j1, m1, j2, m2, j3, m3):
