@@ -38,6 +38,8 @@ class Predictor(Runner):
         self.test_data_loader = None
         self.number_of_batches_per_snapshot = 0
         self.target_calculator = data.target_calculator
+        self.input_data = None
+        self.output_data = None
 
     def predict_from_qeout(self, path_to_file, gather_ldos=False):
         """
@@ -73,7 +75,8 @@ class Predictor(Runner):
             self.data.target_calculator.atoms, gather_ldos=gather_ldos
         )
 
-    def predict_for_atoms(self, atoms, gather_ldos=False, temperature=None):
+    def predict_for_atoms(self, atoms, gather_ldos=False, temperature=None,
+                          save_grads=False):
         """
         Get predicted LDOS for an atomic configuration.
 
@@ -192,11 +195,17 @@ class Predictor(Runner):
             )
             snap_descriptors = torch.from_numpy(snap_descriptors).float()
             self.data.input_data_scaler.transform(snap_descriptors)
-            return self._forward_snap_descriptors(snap_descriptors)
+            if save_grads is True:
+                self.input_data = snap_descriptors
+                self.input_data.requires_grad = True
+                return self._forward_snap_descriptors(snap_descriptors,
+                                                      save_torch_outputs=True)
+            else:
+                return self._forward_snap_descriptors(snap_descriptors)
 
-    def _forward_snap_descriptors(
-        self, snap_descriptors, local_data_size=None
-    ):
+    def _forward_snap_descriptors(self, snap_descriptors,
+                                  local_data_size=None,
+                                  save_torch_outputs=False):
         """Forward a scaled tensor of descriptors through the NN."""
         # Ensure the Network is on the correct device.
         # This line is necessary because GPU acceleration may have been
@@ -205,9 +214,13 @@ class Predictor(Runner):
 
         if local_data_size is None:
             local_data_size = self.data.grid_size
-        predicted_outputs = np.zeros(
-            (local_data_size, self.data.target_calculator.feature_size)
-        )
+        predicted_outputs = \
+            np.zeros((local_data_size,
+                      self.data.target_calculator.feature_size))
+        if save_torch_outputs:
+            self.output_data = \
+                torch.zeros((local_data_size,
+                             self.data.target_calculator.feature_size))
 
         # Only predict if there is something to predict.
         # Elsewise, we just wait at the barrier down below.
@@ -236,13 +249,24 @@ class Predictor(Runner):
                     * self.parameters.mini_batch_size
                 ]
                 inputs = inputs.to(self.parameters._configuration["device"])
-                predicted_outputs[
-                    i
-                    * self.parameters.mini_batch_size : (i + 1)
-                    * self.parameters.mini_batch_size
-                ] = self.data.output_data_scaler.inverse_transform(
-                    self.network(inputs).to("cpu"), as_numpy=True
-                )
+                if save_torch_outputs:
+                    self.output_data[i * self.parameters.mini_batch_size:
+                                      (
+                                                  i + 1) * self.parameters.mini_batch_size] \
+                    = self.network(inputs)
+                    predicted_outputs[i * self.parameters.mini_batch_size:
+                                      (
+                                              i + 1) * self.parameters.mini_batch_size] \
+                    = self.data.output_data_scaler. \
+                        inverse_transform(self.network(inputs).
+                                          to('cpu'), as_numpy=True)
+                else:
+                    predicted_outputs[i * self.parameters.mini_batch_size:
+                                      (
+                                                  i + 1) * self.parameters.mini_batch_size] \
+                        = self.data.output_data_scaler. \
+                        inverse_transform(self.network(inputs).
+                                          to('cpu'), as_numpy=True)
 
             # Restricting the actual quantities to physical meaningful values,
             # i.e. restricting the (L)DOS to positive values.
