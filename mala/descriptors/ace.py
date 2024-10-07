@@ -551,7 +551,9 @@ class ACE(Descriptor):
         nus, limit_nus = self.calc_limit_nus()
 
         if not self.parameters.ace_types_like_snap:
-            self.fingerprint_length = self.ncols0 + len(limit_nus)
+            #self.fingerprint_length = self.ncols0 + len(limit_nus) 
+            #!TODO verify that this fixes desc count mismatch from mala
+            self.fingerprint_length = self.ncols0 + len(limit_nus) - (len(self.parameters.ace_elements)-1)
             # permutation symmetry adapted ACE labels
             Apot = AcePot(
                 self.parameters.ace_elements,
