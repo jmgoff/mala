@@ -231,6 +231,9 @@ class ACE(Descriptor):
 
         self.ncols0 = 3
 
+        self.couplings = None
+        assert 'G' in self.parameters.ace_elements, "ACE descriptors require a separate 'element' type for grid points labeled 'G', please add this at the end of self.parameters.ace_elements"
+        assert not self.parameters.ace_types_like_snap, "Using the same 'element' type for atoms and grid points is not permitted for standar d mala models"
         if self.parameters.ace_types_like_snap and "G" in self.parameters.ace_elements:
             raise Exception("for types_like_snap = True, you must remove the separate element type for grid points")
 
@@ -336,9 +339,13 @@ class ACE(Descriptor):
         nz = self.grid_dimensions[2]
 
         # calculate the coupling coefficients
-        coupling_coeffs = self.calculate_coupling_coeffs()
-        # save the coupling coefficients
-        # saving function will go here
+        if self.couplings != None:
+            coupling_coeffs = self.couplings
+        else:
+            self.couplings = self.calculate_coupling_coeffs()
+            coupling_coeffs = self.couplings
+            # save the coupling coefficients
+            # saving function will go here
 
         # Create LAMMPS instance.
         if self.parameters.bispectrum_cutoff > self.maxrc:
@@ -380,29 +387,7 @@ class ACE(Descriptor):
                     filepath, "in.acegrid.python"
                 )
         # Do the LAMMPS calculation and clean up.
-        print('file %s' % self.parameters.lammps_compute_file)
         lmp.file(self.parameters.lammps_compute_file)
-
-        # Set things not accessible from LAMMPS
-
-        # Analytical relation for fingerprint length
-        # ncoeff = (
-        #     (self.parameters.bispectrum_twojmax + 2)
-        #     * (self.parameters.bispectrum_twojmax + 3)
-        #     * (self.parameters.bispectrum_twojmax + 4)
-        # )
-        # ncoeff = ncoeff // 24  # integer division
-        # self.fingerprint_length = ncols0 + ncoeff
-
-        # Calculation for fingerprint length
-        # TODO: I don't know if this is correct, should be checked by an ACE expert
-        # NOTE: we now handle this later while setting the coupling_coefficients
-        #       (the coupling coefficients specify wich fingerprints are evaluated
-        #        in lammps directly)
-        # self.fingerprint_length = (
-        #    ncols0 + self._calculate_ace_fingerprint_length()
-        # )
-        # printout("Fingerprint length = ", self.fingerprint_length)
 
         # Extract data from LAMMPS calculation.
         # This is different for the parallel and the serial case.
@@ -426,8 +411,6 @@ class ACE(Descriptor):
             printout("LAMMPS fingerprint length = ", ncols_local - 3)
             printout("MALA fingerprint length = ", self.fingerprint_length)
             if ncols_local != self.fingerprint_length + 3:
-                #printout("LAMMPS fingerprint length = ", ncols_local - 3)
-                #printout("MALA fingerprint length = ", self.fingerprint_length)
                 self.fingerprint_length = ncols_local - 3
                 #raise Exception("Inconsistent number of features.")
 
@@ -441,6 +424,8 @@ class ACE(Descriptor):
             )
             self._clean_calculation(lmp, keep_logs)
 
+            #mask Nan values resulting from 0-valued descriptors
+            ace_descriptors_np = mask_A(ace_descriptors_np)
             # Copy the grid dimensions only at the end.
             self.grid_dimensions = [nx, ny, nz]
             return ace_descriptors_np, nrows_local
@@ -467,28 +452,6 @@ class ACE(Descriptor):
             else:
                 return ace_descriptors_np[:, :, :, 3:], nx * ny * nz
 
-    def _calculate_ace_fingerprint_length(self):
-        # TODO: this function is not correct
-        total_descriptors = 0
-        ranks = self.parameters.ace_ranks
-        lmax = self.parameters.ace_lmax
-        nmax = self.parameters.ace_nmax
-        lmin = self.parameters.ace_lmin
-
-        for rank in range(len(ranks)):
-            # Number of radial basis functions for the current rank
-            num_radial_functions = nmax[rank]
-
-            # Number of angular basis functions for the current rank
-            num_angular_functions = lmax[rank] - lmin[rank] + 1
-
-            # Total number of descriptors for the current rank
-            rank_descriptors = num_radial_functions * num_angular_functions
-
-            # Add to total descriptors
-            total_descriptors += rank_descriptors
-
-        return total_descriptors
 
     def calculate_coupling_coeffs(self):
         self.bonds = [
@@ -551,8 +514,6 @@ class ACE(Descriptor):
         nus, limit_nus = self.calc_limit_nus()
 
         if not self.parameters.ace_types_like_snap:
-            #self.fingerprint_length = self.ncols0 + len(limit_nus) 
-            #!TODO verify that this fixes desc count mismatch from mala
             self.fingerprint_length = self.ncols0 + len(limit_nus) - (len(self.parameters.ace_elements)-1)
             # permutation symmetry adapted ACE labels
             Apot = AcePot(
@@ -594,8 +555,6 @@ class ACE(Descriptor):
             )
             Apot.write_pot("coupling_coefficients")
 
-            # Apot.set_funcs(nulst=limit_nus, muflg=True, print_0s=True)
-            # Apot.write_pot("coupling_coefficients")
 
     def calc_limit_nus(self):
         ranked_chem_nus = []
@@ -926,3 +885,11 @@ class ACE(Descriptor):
 
         else:
             return 0.0
+
+
+def mask_A(A,tol=12):
+    A=A.round(16)
+    A[A > (10**tol)] = 0
+    A[A < -(10**tol)] = 0
+    A = np.nan_to_num(A,nan=0,posinf=0,neginf=0)
+    return A
