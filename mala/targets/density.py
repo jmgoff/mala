@@ -316,6 +316,19 @@ class Density(Target):
                 "No cached density available to calculate this property."
             )
 
+    @cached_property
+    def force_contributions(self):
+        """
+        All density based contributions to the forces.
+
+        Calculated via the cached density.
+        """
+        if self.density is not None:
+            return self.get_force_contributions()
+        else:
+            raise Exception("No cached density available to "
+                            "calculate this property.")
+
     def uncache_properties(self):
         """Uncache all cached properties of this calculator."""
         if self._is_property_cached("number_of_electrons"):
@@ -323,6 +336,9 @@ class Density(Target):
 
         if self._is_property_cached("total_energy_contributions"):
             del self.total_energy_contributions
+
+        if self._is_property_cached("force_contributions"):
+            del self.force_contributions
 
     ##############################
     # Methods
@@ -575,8 +591,8 @@ class Density(Target):
             Integration method used to integrate density on the grid.
             Currently supported:
 
-            - "trapz" for trapezoid method (only for cubic grids).
-            - "simps" for Simpson method (only for cubic grids).
+            - "trapezoid" for trapezoid method (only for cubic grids).
+            - "simpson" for Simpson method (only for cubic grids).
             - "summation" for summation and scaling of the values (recommended)
         """
         if density_data is None:
@@ -812,54 +828,9 @@ class Density(Target):
         }
         return energies_dict
 
-    def get_atomic_forces(
-        self,
-        density_data=None,
-        create_file=True,
-        atoms_Angstrom=None,
-        qe_input_data=None,
-        qe_pseudopotentials=None,
-    ):
-        """
-        Calculate the atomic forces.
-
-        This function uses an interface to QE. The atomic forces are
-        calculated via the Hellman-Feynman theorem, although only the local
-        contributions are calculated. The non-local contributions, as well
-        as the SCF correction (so anything wavefunction dependent) are ignored.
-        Therefore, this function is best used for data that was created using
-        local pseudopotentials.
-
-        Parameters
-        ----------
-        density_data : numpy.array
-            Density data on a grid. If None, then the cached
-            density will be used for the calculation.
-
-        create_file : bool
-            If False, the last mala.pw.scf.in file will be used as input for
-            Quantum Espresso. If True (recommended), MALA will create this
-            file according to calculation parameters.
-
-        atoms_Angstrom : ase.Atoms
-            ASE atoms object for the current system. If None, MALA will
-            create one.
-
-        qe_input_data : dict
-            Quantum Espresso parameters dictionary for the ASE<->QE interface.
-            If None (recommended), MALA will create one.
-
-        qe_pseudopotentials : dict
-            Quantum Espresso pseudopotential dictionaty for the ASE<->QE
-            interface. If None (recommended), MALA will create one.
-
-        Returns
-        -------
-        atomic_forces : numpy.ndarray
-            An array of the form (natoms, 3), containing the atomic forces
-            in eV/Ang.
-
-        """
+    def get_force_contributions(self, density_data=None, create_file=True,
+                                atoms_Angstrom=None, qe_input_data=None,
+                                qe_pseudopotentials=None):
         if density_data is None:
             density_data = self.density
             if density_data is None:
@@ -871,24 +842,46 @@ class Density(Target):
         # First, set up the total energy module for calculation.
         if atoms_Angstrom is None:
             atoms_Angstrom = self.atoms
-        self.__setup_total_energy_module(
-            density_data,
-            atoms_Angstrom,
-            create_file=create_file,
-            qe_input_data=qe_input_data,
-            qe_pseudopotentials=qe_pseudopotentials,
-        )
 
-        # Now calculate the forces.
-        atomic_forces = np.array(
-            te.calc_forces(len(atoms_Angstrom))
-        ).transpose()
+        # If the total energy has been calculated, we don't need to
+        # re-execute this particular code.
+        if self._is_property_cached("total_energy_contributions"):
+            pass
+        else:
+            self.__setup_total_energy_module(density_data, atoms_Angstrom,
+                                             create_file=create_file,
+                                             qe_input_data=qe_input_data,
+                                             qe_pseudopotentials=
+                                             qe_pseudopotentials)
 
-        # QE returns the forces in Ry/Bohr.
-        atomic_forces = AtomicForce.convert_units(
-            atomic_forces, in_units="Ry/Bohr"
-        )
-        return atomic_forces
+        # Get the number of gridpoints in QE and MALA.
+        number_of_gridpoints = te.get_nnr()
+        if len(density_data.shape) == 4:
+            number_of_gridpoints_mala = density_data.shape[0] * \
+                                        density_data.shape[1] * \
+                                        density_data.shape[2]
+        elif len(density_data.shape) == 2:
+            number_of_gridpoints_mala = density_data.shape[0]
+        else:
+            raise Exception("Density data has wrong dimensions. ")
+
+        spin = te.get_nspin()
+
+        # Putting the force contributions together.
+        # @Normand: If you add more things to be extracted from QE,
+        # I would suggest you do it here.
+        # Hartree potential
+        hartree_potential = np.zeros([number_of_gridpoints, 1])
+        te.v_h_wrapper(hartree_potential, number_of_gridpoints, spin)
+        hartree_potential = np.reshape(hartree_potential,
+                                       self.grid_dimensions+[1], order="F")
+        force_contribution = {"hartree": np.reshape(hartree_potential,
+                                                    [number_of_gridpoints_mala,
+                                                     1],
+                                                    order="C") * Rydberg * \
+                                         self.voxel.volume}
+
+        return force_contribution
 
     @staticmethod
     def get_scaled_positions_for_qe(atoms):
@@ -960,7 +953,7 @@ class Density(Target):
 
         if Density.te_mutex is False:
             printout(
-                "MALA: Starting QuantumEspresso to get density-based"
+                "Starting QuantumEspresso to get density-based"
                 " energy contributions.",
                 min_verbosity=0,
             )
@@ -968,14 +961,18 @@ class Density(Target):
             t0 = time.perf_counter()
             te.initialize(self.y_planes)
             barrier()
-            t1 = time.perf_counter()
-            printout("time used by total energy initialization: ", t1 - t0)
+            printout(
+                "Total energy module: Time used by total energy initialization: {:.8f}s".format(
+                    time.perf_counter() - t0
+                ),
+                min_verbosity=2,
+            )
 
             Density.te_mutex = True
-            printout("MALA: QuantumEspresso setup done.", min_verbosity=0)
+            printout("QuantumEspresso setup done.", min_verbosity=0)
         else:
             printout(
-                "MALA: QuantumEspresso is already running. Except for"
+                "QuantumEspresso is already running. Except for"
                 " the atomic positions, no new parameters will be used.",
                 min_verbosity=0,
             )
@@ -1087,10 +1084,10 @@ class Density(Target):
                 )
             )
             barrier()
-            t1 = time.perf_counter()
             printout(
-                "time used by gaussian descriptors: ",
-                t1 - t0,
+                "Total energy module: Time used by gaussian descriptors: {:.8f}s".format(
+                    time.perf_counter() - t0
+                ),
                 min_verbosity=2,
             )
 
@@ -1119,10 +1116,10 @@ class Density(Target):
                 )
             )
             barrier()
-            t1 = time.perf_counter()
             printout(
-                "time used by reference gaussian descriptors: ",
-                t1 - t0,
+                "Total energy module: Time used by reference gaussian descriptors: {:.8f}s".format(
+                    time.perf_counter() - t0
+                ),
                 min_verbosity=2,
             )
 
@@ -1149,9 +1146,12 @@ class Density(Target):
             self._parameters_full.descriptors.use_atomic_density_energy_formula,
         )
         barrier()
-        t1 = time.perf_counter()
-        printout("time used by set_positions: ", t1 - t0, min_verbosity=2)
-
+        printout(
+            "Total energy module: Time used by set_positions: {:.8f}s".format(
+                time.perf_counter() - t0
+            ),
+            min_verbosity=2,
+        )
         barrier()
 
         if self._parameters_full.descriptors.use_atomic_density_energy_formula:
@@ -1191,9 +1191,11 @@ class Density(Target):
                 1,
             )
             barrier()
-            t1 = time.perf_counter()
             printout(
-                "time used by set_positions_gauss: ", t1 - t0, min_verbosity=2
+                "Total energy module: Time used by set_positions_gauss: {:.8f}s".format(
+                    time.perf_counter() - t0
+                ),
+                min_verbosity=2,
             )
 
         # Now we can set the new density.
@@ -1201,8 +1203,12 @@ class Density(Target):
         t0 = time.perf_counter()
         te.set_rho_of_r(density_for_qe, number_of_gridpoints, nr_spin_channels)
         barrier()
-        t1 = time.perf_counter()
-        printout("time used by set_rho_of_r: ", t1 - t0, min_verbosity=2)
+        printout(
+            "Total energy module: Time used by set_rho_of_r: {:.8f}s".format(
+                time.perf_counter() - t0
+            ),
+            min_verbosity=2,
+        )
 
         return atoms_Angstrom
 

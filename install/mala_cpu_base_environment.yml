@@ -7,6 +7,7 @@ dependencies:
   - pip
   - numpy
   - scipy
+  - sympy
   - optuna
   - pandas
   - ase
@@ -14,3 +15,5 @@ dependencies:
   - mpmath
   - tensorboard
   - scikit-spatial
+  - pip:
+      - openpmd-api

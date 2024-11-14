@@ -8,5 +8,8 @@ optuna
 scipy
 pandas
 tensorboard
-openpmd-api>=0.15
+openpmd-api
 scikit-spatial
+tqdm
+sympy
+pyyaml

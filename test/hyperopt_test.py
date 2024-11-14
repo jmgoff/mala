@@ -7,9 +7,7 @@ import optuna
 import mala
 import numpy as np
 
-from mala.datahandling.data_repo import data_repo_path
-
-data_path = os.path.join(data_repo_path, "Be2")
+from mala.datahandling.data_repo import data_path
 
 # Control how much the loss should be better after hyperopt compared to
 # before. This value is fairly high, but we're training on absolutely
@@ -44,7 +42,7 @@ class TestHyperparameterOptimization:
         test_parameters.running.max_number_epochs = 20
         test_parameters.running.mini_batch_size = 40
         test_parameters.running.learning_rate = 0.00001
-        test_parameters.running.trainingtype = "Adam"
+        test_parameters.running.optimizer = "Adam"
         test_parameters.hyperparameters.n_trials = 20
         test_parameters.hyperparameters.hyper_opt_method = "optuna"
 
@@ -135,7 +133,7 @@ class TestHyperparameterOptimization:
         test_parameters.running.max_number_epochs = 5
         test_parameters.running.mini_batch_size = 40
         test_parameters.running.learning_rate = 0.00001
-        test_parameters.running.trainingtype = "Adam"
+        test_parameters.running.optimizer = "Adam"
         test_parameters.hyperparameters.n_trials = 20
         test_parameters.hyperparameters.hyper_opt_method = "optuna"
         test_parameters.hyperparameters.study_name = "test_ho"
@@ -244,7 +242,7 @@ class TestHyperparameterOptimization:
         test_parameters.running.max_number_epochs = 10
         test_parameters.running.mini_batch_size = 40
         test_parameters.running.learning_rate = 0.00001
-        test_parameters.running.trainingtype = "Adam"
+        test_parameters.running.optimizer = "Adam"
         test_parameters.hyperparameters.n_trials = 8
         test_parameters.hyperparameters.hyper_opt_method = "naswot"
 
@@ -312,7 +310,7 @@ class TestHyperparameterOptimization:
         test_parameters.running.max_number_epochs = 20
         test_parameters.running.mini_batch_size = 40
         test_parameters.running.learning_rate = 0.00001
-        test_parameters.running.trainingtype = "Adam"
+        test_parameters.running.optimizer = "Adam"
         test_parameters.hyperparameters.n_trials = 8
         test_parameters.hyperparameters.hyper_opt_method = hyper_optimizer
 
@@ -354,7 +352,7 @@ class TestHyperparameterOptimization:
         # If we do a NASWOT run currently we can provide an input
         # array of trials.
         test_hp_optimizer.add_hyperparameter(
-            "categorical", "trainingtype", choices=["Adam", "SGD"]
+            "categorical", "optimizer", choices=["Adam", "SGD"]
         )
         test_hp_optimizer.add_hyperparameter(
             "categorical", "layer_activation_00", choices=["ReLU", "Sigmoid"]
@@ -377,7 +375,7 @@ class TestHyperparameterOptimization:
         )
         test_trainer.train_network()
         test_parameters.show()
-        return test_trainer.final_test_loss
+        return test_trainer.final_validation_loss
 
     def test_hyperopt_optuna_requeue_zombie_trials(self, tmp_path):
 
@@ -393,7 +391,7 @@ class TestHyperparameterOptimization:
         test_parameters.running.max_number_epochs = 2
         test_parameters.running.mini_batch_size = 40
         test_parameters.running.learning_rate = 0.00001
-        test_parameters.running.trainingtype = "Adam"
+        test_parameters.running.optimizer = "Adam"
         test_parameters.hyperparameters.n_trials = 2
         test_parameters.hyperparameters.hyper_opt_method = "optuna"
         test_parameters.hyperparameters.study_name = "test_ho"

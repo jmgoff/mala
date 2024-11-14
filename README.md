@@ -1,5 +1,11 @@
 ![image](./docs/source/img/logos/mala_horizontal.png)
 
+# NOTE!
+
+This version of MALA must be used with the corresponding version of lammps:
+
+https://github.com/jmgoff/lammps_compute_PACE/tree/mala-ace-grid
+
 # MALA
 
 [![CPU](https://github.com/mala-project/mala/actions/workflows/cpu-tests.yml/badge.svg)](https://github.com/mala-project/mala/actions/workflows/cpu-tests.yml)

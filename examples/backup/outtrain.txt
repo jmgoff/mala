@@ -1,0 +1,117 @@
+Checking the snapshots and your inputs for consistency.
+Checking descriptor file  Be_snapshot0.in.npy at ./
+Checking targets file  Be_snapshot0.out.npy at ./
+Checking descriptor file  Be_snapshot0.in.npy at ./
+Checking targets file  Be_snapshot0.out.npy at ./
+Consistency check successful.
+Initializing the data scalers.
+Input scaler parametrized.
+Output scaler parametrized.
+Data scalers initialized.
+Build datasets.
+torch.Size([8748, 48]) torch.Size([1, 48])
+torch.Size([8748, 48]) torch.Size([1, 48])
+Build dataset: Done.
+after handler ACE
+Initial Guess - validation data loss:  0.11327038072559932
+Epoch 0: validation data loss: 0.10562043211775828
+Epoch 1: validation data loss: 0.09805381461365582
+Epoch 2: validation data loss: 0.09044699472923802
+Epoch 3: validation data loss: 0.08300047922352133
+Epoch 4: validation data loss: 0.0746347784451698
+Epoch 5: validation data loss: 0.06631909984431855
+Epoch 6: validation data loss: 0.05830388961861667
+Epoch 7: validation data loss: 0.050420748044366706
+Epoch 8: validation data loss: 0.043667231520561324
+Epoch 9: validation data loss: 0.03817208172523812
+Epoch 10: validation data loss: 0.032995635516022984
+Epoch 11: validation data loss: 0.028743983403732788
+Epoch 12: validation data loss: 0.025302558184758715
+Epoch 13: validation data loss: 0.02251723041273143
+Epoch 14: validation data loss: 0.020328094970145726
+Epoch 15: validation data loss: 0.018476706117255503
+Epoch 16: validation data loss: 0.016927753953628888
+Epoch 17: validation data loss: 0.015648027533265555
+Epoch 18: validation data loss: 0.0145621365063811
+Epoch 19: validation data loss: 0.013637196527768488
+Epoch 20: validation data loss: 0.012839560095033689
+Epoch 21: validation data loss: 0.012142854194118553
+Epoch 22: validation data loss: 0.011536402245090432
+Epoch 23: validation data loss: 0.010986110391137806
+Epoch 24: validation data loss: 0.010485997483066228
+Epoch 25: validation data loss: 0.010028881569431252
+Epoch 26: validation data loss: 0.009633025077924337
+Epoch 27: validation data loss: 0.009283539367048708
+Epoch 28: validation data loss: 0.00896304546425876
+Epoch 29: validation data loss: 0.008685850661639209
+Epoch 30: validation data loss: 0.008449597990131813
+Epoch 31: validation data loss: 0.008161159955203261
+Epoch 32: validation data loss: 0.007909397556357188
+Epoch 33: validation data loss: 0.007693413185746702
+Epoch 34: validation data loss: 0.007518607731823507
+Epoch 35: validation data loss: 0.007372077197244723
+Epoch 36: validation data loss: 0.007245390382531571
+Epoch 37: validation data loss: 0.0071347238810639405
+Epoch 38: validation data loss: 0.007003864741216511
+Epoch 39: validation data loss: 0.006891841213452762
+Epoch 40: validation data loss: 0.006736804361212744
+Epoch 41: validation data loss: 0.006624570720271977
+Epoch 42: validation data loss: 0.0065373704858022194
+Epoch 43: validation data loss: 0.006466731633225533
+Epoch 44: validation data loss: 0.006408018064281168
+Epoch 45: validation data loss: 0.006359136267884137
+Epoch 46: validation data loss: 0.006317467450006912
+Epoch 47: validation data loss: 0.006282455844966244
+Epoch 48: validation data loss: 0.0062523731902309745
+Epoch 49: validation data loss: 0.006226697468866497
+Epoch 50: validation data loss: 0.006204813038377457
+Epoch 51: validation data loss: 0.006185568630967511
+Epoch 52: validation data loss: 0.006169177625821606
+Epoch 53: validation data loss: 0.006155157198100329
+Epoch 54: validation data loss: 0.006142948860447157
+Epoch 55: validation data loss: 0.006132797563457053
+Epoch 56: validation data loss: 0.0061228928500658844
+Epoch 57: validation data loss: 0.006114538946108187
+Epoch 58: validation data loss: 0.006107551322135751
+Epoch 59: validation data loss: 0.00610115484559917
+Epoch 60: validation data loss: 0.00608388963899656
+Epoch 61: validation data loss: 0.0060708506466591195
+Epoch 62: validation data loss: 0.006062251247771799
+Epoch 63: validation data loss: 0.006056124216889682
+Epoch 64: validation data loss: 0.006050358624218806
+Epoch 65: validation data loss: 0.006046350688150484
+Epoch 66: validation data loss: 0.006042523471187783
+Epoch 67: validation data loss: 0.00604028353408047
+Epoch 68: validation data loss: 0.00603700337344653
+Epoch 69: validation data loss: 0.006034709002873669
+Epoch 70: validation data loss: 0.006032844656678639
+Epoch 71: validation data loss: 0.006031181714306139
+Epoch 72: validation data loss: 0.006029608587151793
+Epoch 73: validation data loss: 0.006028307082990533
+Epoch 74: validation data loss: 0.006026895623228866
+Epoch 75: validation data loss: 0.006025847234682405
+Epoch 76: validation data loss: 0.006025027466691248
+Epoch 77: validation data loss: 0.006023895250607843
+Epoch 78: validation data loss: 0.00602345216219828
+Epoch 79: validation data loss: 0.0060222715003305375
+Epoch 80: validation data loss: 0.006021656402169842
+Epoch 81: validation data loss: 0.006021063077395365
+Epoch 82: validation data loss: 0.006020536161448858
+Epoch 83: validation data loss: 0.006020010334171661
+Epoch 84: validation data loss: 0.006019593373825561
+Epoch 85: validation data loss: 0.006019156817431864
+Epoch 86: validation data loss: 0.0060188851944387774
+Epoch 87: validation data loss: 0.006018536275924613
+Epoch 88: validation data loss: 0.006018547162617722
+Epoch 89: validation data loss: 0.006017797069462467
+Epoch 90: validation data loss: 0.00601749060905143
+Epoch 91: validation data loss: 0.00601759675430925
+Epoch 92: validation data loss: 0.006017239126440597
+Epoch 93: validation data loss: 0.006017189047652293
+Epoch 94: validation data loss: 0.0060168199887558746
+Epoch 95: validation data loss: 0.006016337708251117
+Epoch 96: validation data loss: 0.006016114531042369
+Epoch 97: validation data loss: 0.006016443309174281
+Epoch 98: validation data loss: 0.00601591911490105
+Epoch 99: validation data loss: 0.006015607755478114
+Final validation data loss:  0.006015607755478114
