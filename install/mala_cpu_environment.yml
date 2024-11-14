@@ -133,6 +133,7 @@ dependencies:
   - sleef=3.5.1
   - sqlalchemy=1.4.45
   - stevedore=4.1.1
+  - sympy=1.12
   - tbb=2021.7.0
   - tensorboard=2.11.0
   - tensorboard-data-server=0.6.1
