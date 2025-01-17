@@ -1,0 +1,2 @@
+in this example, running e vs f shows the numerical differentiation result vs the result
+from the mala/lammps interface. they are not consistent.

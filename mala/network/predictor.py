@@ -2,7 +2,6 @@
 
 import numpy as np
 import torch
-
 from mala.common.parallelizer import printout, get_rank, barrier
 from mala.network.runner import Runner
 
@@ -76,7 +75,7 @@ class Predictor(Runner):
         )
 
     def predict_for_atoms(self, atoms, gather_ldos=False, temperature=None,
-                          save_grads=False):
+                          save_grads=False,pass_descriptors=None):
         """
         Get predicted LDOS for an atomic configuration.
 
@@ -130,17 +129,21 @@ class Predictor(Runner):
         self.data.target_calculator.invalidate_target()
 
         # Calculate descriptors.
-        snap_descriptors, local_size = (
-            self.data.descriptor_calculator.calculate_from_atoms(
-                atoms, self.data.grid_dimension
+        if pass_descriptors == None:
+            snap_descriptors, local_size = (
+                self.data.descriptor_calculator.calculate_from_atoms(
+                    atoms, self.data.grid_dimension
+                )
             )
-        )
+            feature_length = self.data.descriptor_calculator.fingerprint_length
+            descs_with_xyz = self.data.descriptor_calculator.descriptors_contain_xyz
+        elif pass_descriptors != None:
+            snap_descriptors, local_size, feature_length, descs_with_xyz = pass_descriptors
 
         # Provide info from current snapshot to target calculator.
         self.data.target_calculator.read_additional_calculation_data(
             [atoms, self.data.grid_dimension], "atoms+grid"
         )
-        feature_length = self.data.descriptor_calculator.fingerprint_length
 
         # The actual calculation of the LDOS from the descriptors depends
         # on whether we run in parallel or serial. In the former case,
@@ -161,7 +164,7 @@ class Predictor(Runner):
                     return None
 
             else:
-                if self.data.descriptor_calculator.descriptors_contain_xyz:
+                if descs_with_xyz:
                     self.data.target_calculator.local_grid = snap_descriptors[
                         :, 0:3
                     ].copy()
@@ -186,7 +189,8 @@ class Predictor(Runner):
                 )
 
         if get_rank() == 0:
-            if self.data.descriptor_calculator.descriptors_contain_xyz:
+            #if self.data.descriptor_calculator.descriptors_contain_xyz:
+            if descs_with_xyz:
                 snap_descriptors = snap_descriptors[:, :, :, 3:]
                 feature_length -= 3
 

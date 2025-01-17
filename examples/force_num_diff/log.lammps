@@ -1,0 +1,325 @@
+LAMMPS (15 Jun 2023 - Development - 05f66d61aa-modified)
+# example with unique grid type
+
+variable        nfreq equal 1 # how frequently to run fix (should be every step)
+variable        ngridx equal 18 # how many grid points
+variable        ngridy equal 18 # how many grid points
+variable        ngridz equal 27 # how many grid points
+#variable        ngridx equal 22 # how many grid points
+#variable        ngridy equal 22 # how many grid points
+#variable        ngridz equal 33 # how many grid points
+variable        nthermo equal 1 #frequency for printing thermodynamic data
+variable        nrep index 3 # number of repeated unit cells for Ca
+variable        a index 4.1 # fake lattice constant
+variable        fdelta equal 1.0e-3
+variable        ndump index 50     # dump output interval
+
+units           metal
+atom_modify     map hash
+
+
+boundary        p p p
+#boundary        f f f
+
+read_data       Be_snapshot0.data
+Reading data file ...
+  triclinic box = (0 0 0) to (2.2598259 1.9570657 3.5698786) with tilt (-1.1299129 0 0)
+WARNING: Triclinic box skew is large. LAMMPS will run inefficiently. (src/domain.cpp:220)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  2 atoms
+  read_data CPU = 0.001 seconds
+#make a fictitious system to test grid force calculations
+mass            1 9.0
+
+
+pair_style      zero 6.0
+pair_coeff      * *
+
+group           acegroup type 1
+2 atoms in group acegroup
+group           first id 1
+1 atoms in group first
+group           second id 2
+1 atoms in group second
+variable        rcutfac equal 6.0 # define rcutfac for pairstyle_zero (must be bigger than radial cutoffs in coupling_coefficients.yace
+
+
+variable        ace_options string "coupling_coefficients.yace ugridtype 1"
+#variable        ace_options string "coupling_coefficients_fullbasis.yace ugridtype 1"
+
+#displace_atoms  all random 0.01 0.01 0.2 3542
+#displace_atoms  first move 1.e-5 0.0 0.0 units box
+#displace_atoms  second move 1.e-5 0.0 0.0 units box
+
+pair_style      zero ${rcutfac}
+pair_style      zero 6
+pair_coeff      * *
+#pair_style      hybrid/overlay zero ${rcutfac}  zbl 1.0 1.5 # null pairstyle so that lammps will still evolve system in time
+#pair_style      hybrid/overlay zero ${rcutfac}  zbl 4.0 5.0 # null pairstyle so that lammps will still evolve system in time
+#pair_coeff      * * zero
+#pair_coeff      * * zbl 3.0 3.0
+#
+timestep        0.5e-3
+neighbor        0.3 bin
+neigh_modify    every 1 delay 0 check yes
+
+#velocity        all create 300.0 4928459 rot yes dist gaussian
+compute     mygrid all pace/grid  grid ${ngridx} ${ngridy} ${ngridz} ${ace_options}
+compute     mygrid all pace/grid  grid 18 ${ngridy} ${ngridz} ${ace_options}
+compute     mygrid all pace/grid  grid 18 18 ${ngridz} ${ace_options}
+compute     mygrid all pace/grid  grid 18 18 27 ${ace_options}
+compute     mygrid all pace/grid  grid 18 18 27 coupling_coefficients.yace ugridtype 1
+#define lammps python command
+python          pre_force_callback file mala_betas.py
+#python          pre_force_callback file dummy_betas.py
+
+#fix             2 all nvt temp 300 300 0.01
+#fix             2 all nve
+fix             4 all python/acegridforce ${nfreq} pre_force pre_force_callback grid ${ngridx} ${ngridy} ${ngridz} ${ace_options}
+fix             4 all python/acegridforce 1 pre_force pre_force_callback grid ${ngridx} ${ngridy} ${ngridz} ${ace_options}
+fix             4 all python/acegridforce 1 pre_force pre_force_callback grid 18 ${ngridy} ${ngridz} ${ace_options}
+fix             4 all python/acegridforce 1 pre_force pre_force_callback grid 18 18 ${ngridz} ${ace_options}
+fix             4 all python/acegridforce 1 pre_force pre_force_callback grid 18 18 27 ${ace_options}
+fix             4 all python/acegridforce 1 pre_force pre_force_callback grid 18 18 27 coupling_coefficients.yace ugridtype 1
+#fix             5 all external pf/callback 1 1
+#fix_modify      4 energy yes
+
+thermo          ${nthermo}
+thermo          1
+variable        fsq atom fx^2+fy^2+fz^2
+compute         favsq all reduce ave v_fsq
+
+thermo_style    custom step temp pe etotal press c_favsq
+
+dump 1 all custom 1 dump.*.mala id type x y z fx fy fz
+
+run             0
+WARNING: No fixes with time integration, atoms won't move (src/verlet.cpp:60)
+Generated 0 of 0 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 6.3
+  ghost atom cutoff = 6.3
+  binsize = 3.15, bins = 2 1 2
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair zero, perpetual
+      attributes: half, newton on
+      pair build: half/bin/newton/tri
+      stencil: half/bin/3d/tri
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 5.102 | 5.102 | 5.102 Mbytes
+   Step          Temp          PotEng         TotEng         Press         c_favsq    
+         0   0              0              0              0             -nan          
+Loop time of 4.637e-06 on 1 procs for 0 steps with 2 atoms
+
+129.4% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 4.637e-06  |            |       |100.00
+
+Nlocal:              2 ave           2 max           2 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:            638 ave         638 max         638 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:            134 ave         134 max         134 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 134
+Ave neighs/atom = 67
+Neighbor list builds = 0
+Dangerous builds = 0
+displace_atoms  first move ${fdelta} 0.0 0.0 units box
+displace_atoms  first move 0.001 0.0 0.0 units box
+Displacing atoms ...
+undump 1
+reset_timestep  1
+dump 1 all custom 1 dump.*.mala id type x y z fx fy fz
+run             0
+WARNING: No fixes with time integration, atoms won't move (src/verlet.cpp:60)
+Generated 0 of 0 mixed pair_coeff terms from geometric mixing rule
+Per MPI rank memory allocation (min/avg/max) = 5.247 | 5.247 | 5.247 Mbytes
+   Step          Temp          PotEng         TotEng         Press         c_favsq    
+         1   0              0              0              0             -nan          
+Loop time of 1.159e-06 on 1 procs for 0 steps with 2 atoms
+
+258.8% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 1.159e-06  |            |       |100.00
+
+Nlocal:              2 ave           2 max           2 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:            638 ave         638 max         638 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:            134 ave         134 max         134 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 134
+Ave neighs/atom = 67
+Neighbor list builds = 0
+Dangerous builds = 0
+displace_atoms  first move ${fdelta} 0.0 0.0 units box
+displace_atoms  first move 0.001 0.0 0.0 units box
+Displacing atoms ...
+undump 1
+reset_timestep  2
+dump 1 all custom 1 dump.*.mala id type x y z fx fy fz
+run             0
+WARNING: No fixes with time integration, atoms won't move (src/verlet.cpp:60)
+Generated 0 of 0 mixed pair_coeff terms from geometric mixing rule
+Per MPI rank memory allocation (min/avg/max) = 5.247 | 5.247 | 5.247 Mbytes
+   Step          Temp          PotEng         TotEng         Press         c_favsq    
+         2   0              0              0              0             -nan          
+Loop time of 3.448e-06 on 1 procs for 0 steps with 2 atoms
+
+203.0% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 3.448e-06  |            |       |100.00
+
+Nlocal:              2 ave           2 max           2 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:            638 ave         638 max         638 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:            134 ave         134 max         134 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 134
+Ave neighs/atom = 67
+Neighbor list builds = 0
+Dangerous builds = 0
+displace_atoms  first move ${fdelta} 0.0 0.0 units box
+displace_atoms  first move 0.001 0.0 0.0 units box
+Displacing atoms ...
+undump 1
+reset_timestep  3
+dump 1 all custom 1 dump.*.mala id type x y z fx fy fz
+run             0
+WARNING: No fixes with time integration, atoms won't move (src/verlet.cpp:60)
+Generated 0 of 0 mixed pair_coeff terms from geometric mixing rule
+Per MPI rank memory allocation (min/avg/max) = 5.247 | 5.247 | 5.247 Mbytes
+   Step          Temp          PotEng         TotEng         Press         c_favsq    
+         3   0              0              0              0             -nan          
+Loop time of 3.756e-06 on 1 procs for 0 steps with 2 atoms
+
+0.0% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 3.756e-06  |            |       |100.00
+
+Nlocal:              2 ave           2 max           2 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:            638 ave         638 max         638 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:            134 ave         134 max         134 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 134
+Ave neighs/atom = 67
+Neighbor list builds = 0
+Dangerous builds = 0
+displace_atoms  first move ${fdelta} 0.0 0.0 units box
+displace_atoms  first move 0.001 0.0 0.0 units box
+Displacing atoms ...
+undump 1
+reset_timestep  4
+dump 1 all custom 1 dump.*.mala id type x y z fx fy fz
+run             0
+WARNING: No fixes with time integration, atoms won't move (src/verlet.cpp:60)
+Generated 0 of 0 mixed pair_coeff terms from geometric mixing rule
+Per MPI rank memory allocation (min/avg/max) = 5.247 | 5.247 | 5.247 Mbytes
+   Step          Temp          PotEng         TotEng         Press         c_favsq    
+         4   0              0              0              0             -nan          
+Loop time of 1.147e-06 on 1 procs for 0 steps with 2 atoms
+
+261.6% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 1.147e-06  |            |       |100.00
+
+Nlocal:              2 ave           2 max           2 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:            638 ave         638 max         638 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:            134 ave         134 max         134 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 134
+Ave neighs/atom = 67
+Neighbor list builds = 0
+Dangerous builds = 0
+displace_atoms  first move ${fdelta} 0.0 0.0 units box
+displace_atoms  first move 0.001 0.0 0.0 units box
+Displacing atoms ...
+undump 1
+reset_timestep  5
+dump 1 all custom 1 dump.*.mala id type x y z fx fy fz
+run             0
+WARNING: No fixes with time integration, atoms won't move (src/verlet.cpp:60)
+Generated 0 of 0 mixed pair_coeff terms from geometric mixing rule
+Per MPI rank memory allocation (min/avg/max) = 5.247 | 5.247 | 5.247 Mbytes
+   Step          Temp          PotEng         TotEng         Press         c_favsq    
+         5   0              0              0              0             -nan          
+Loop time of 1.275e-06 on 1 procs for 0 steps with 2 atoms
+
+235.3% CPU use with 1 MPI tasks x no OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 1.275e-06  |            |       |100.00
+
+Nlocal:              2 ave           2 max           2 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:            638 ave         638 max         638 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:            134 ave         134 max         134 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 134
+Ave neighs/atom = 67
+Neighbor list builds = 0
+Dangerous builds = 0
+Total wall time: 0:00:43
