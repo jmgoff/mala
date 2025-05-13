@@ -236,7 +236,7 @@ class ACE(Descriptor):
         self.ncols0 = 3
         self.couplings = None
 
-        assert not self.parameters.ace_types_like_snap, "Using the same 'element' type for atoms and grid points is not permitted for standar d mala models"
+        assert not self.parameters.ace_types_like_snap, "Using the same 'element' type for atoms and grid points is not permitted for standard mala models"
         if self.parameters.ace_types_like_snap and "G" in self.parameters.ace_elements:
             raise Exception("for types_like_snap = True, you must remove the separate element type for grid points")
 
@@ -432,6 +432,8 @@ class ACE(Descriptor):
         #    self.couplings = self.calculate_coupling_coeffs()
         # printout("Fingerprint length = ", self.fingerprint_length)
         self.couplings = self.calculate_coupling_coeffs()
+        lmp.file(self.parameters.lammps_compute_file)
+
         # Extract data from LAMMPS calculation.
         # This is different for the parallel and the serial case.
         # In the serial case we can expect to have a full bispectrum array at
@@ -454,8 +456,6 @@ class ACE(Descriptor):
             printout("LAMMPS fingerprint length = ", ncols_local - 3)
             printout("MALA fingerprint length = ", self.fingerprint_length)
             if ncols_local != self.fingerprint_length + 3:
-                #printout("LAMMPS fingerprint length = ", ncols_local - 3)
-                #printout("MALA fingerprint length = ", self.fingerprint_length)
                 self.fingerprint_length = ncols_local - 3
                 #raise Exception("Inconsistent number of features.")
 
@@ -469,6 +469,8 @@ class ACE(Descriptor):
             )
             self._clean_calculation(lmp, keep_logs)
 
+            #mask Nan values resulting from 0-valued descriptors
+            ace_descriptors_np = mask_A(ace_descriptors_np)
             # Copy the grid dimensions only at the end.
             self.grid_dimensions = [nx, ny, nz]
             return ace_descriptors_np, nrows_local
@@ -495,28 +497,6 @@ class ACE(Descriptor):
             else:
                 return ace_descriptors_np[:, :, :, 3:], nx * ny * nz
 
-    def _calculate_ace_fingerprint_length(self):
-        # TODO: this function is not correct
-        total_descriptors = 0
-        ranks = self.parameters.ace_ranks
-        lmax = self.parameters.ace_lmax
-        nmax = self.parameters.ace_nmax
-        lmin = self.parameters.ace_lmin
-
-        for rank in range(len(ranks)):
-            # Number of radial basis functions for the current rank
-            num_radial_functions = nmax[rank]
-
-            # Number of angular basis functions for the current rank
-            num_angular_functions = lmax[rank] - lmin[rank] + 1
-
-            # Total number of descriptors for the current rank
-            rank_descriptors = num_radial_functions * num_angular_functions
-
-            # Add to total descriptors
-            total_descriptors += rank_descriptors
-
-        return total_descriptors
 
     def calculate_coupling_coeffs(self):
         self.bonds = [
@@ -621,8 +601,6 @@ class ACE(Descriptor):
             )
             Apot.write_pot("coupling_coefficients")
 
-            # Apot.set_funcs(nulst=limit_nus, muflg=True, print_0s=True)
-            # Apot.write_pot("coupling_coefficients")
 
     def calc_limit_nus(self):
         ranked_chem_nus = []
@@ -953,3 +931,11 @@ class ACE(Descriptor):
 
         else:
             return 0.0
+
+
+def mask_A(A,tol=12):
+    A=A.round(16)
+    A[A > (10**tol)] = 0
+    A[A < -(10**tol)] = 0
+    A = np.nan_to_num(A,nan=0,posinf=0,neginf=0)
+    return A

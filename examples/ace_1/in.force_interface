@@ -1,0 +1,52 @@
+# example with unique grid type
+
+variable        nfreq equal 1 # how frequently to run fix (should be every step)
+variable        ngrid equal 11 # how many grid points
+variable        nthermo equal 1 #frequency for printing thermodynamic data
+variable        nrep index 3 # number of repeated unit cells for Ca
+variable        a index 4.1 # fake lattice constant
+variable        fdelta index 1.0e-5 # displacement size
+variable        nugget equal 1.0e-12 # regularization for relerr
+variable        ndump index 50     # dump output interval
+
+units           metal
+atom_modify     map hash
+
+
+boundary        p p p
+
+read_data       Be_snapshot0.data
+#make a fictitious system to test grid force calculations
+mass            1 9.0
+
+group           acegroup type 1
+variable        rcutfac equal 6.0 # define rcutfac for pairstyle_zero (must be bigger than radial cutoffs in coupling_coefficients.yace
+
+
+variable        ace_options string "coupling_coefficients.yace ugridtype 1"
+
+displace_atoms  all random 0.01 0.01 0.01 3542
+
+pair_style      zero ${rcutfac} # null pairstyle so that lammps will still evolve system in time
+pair_coeff      * *
+
+timestep        0.5e-3
+neighbor        0.3 bin
+neigh_modify    every 1 delay 0 check yes
+
+
+#define lammps python command
+python          pre_force_callback file mala_betas.py
+
+fix             4 all python/acegridforce ${nfreq} pre_force pre_force_callback grid ${ngrid} ${ngrid} ${ngrid} ${ace_options} 
+#fix_modify      4 energy yes
+
+thermo          ${nthermo}
+
+# add numdiff (numerical differentiation) forces to validate fix python/gridforceace
+compute         favsq all reduce ave v_fsq
+
+
+thermo_style    custom step temp pe etotal press c_favsq 
+
+run             10

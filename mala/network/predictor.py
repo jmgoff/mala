@@ -2,7 +2,6 @@
 
 import numpy as np
 import torch
-torch.set_num_threads(1)
 from mala.common.parallelizer import printout, get_rank, barrier
 from mala.network.runner import Runner
 
