@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import torch
+torch.set_num_threads(1)
 from torch.utils.data import TensorDataset
 
 from mala.common.parallelizer import printout, barrier

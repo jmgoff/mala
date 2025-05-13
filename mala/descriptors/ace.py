@@ -21,7 +21,6 @@ import mala.descriptors.ace_coupling_utils as acu
 import mala.descriptors.wigner_coupling as wigner_coupling
 import mala.descriptors.cg_coupling as cg_coupling
 
-
 class ACE(Descriptor):
     """Class for calculation and parsing of bispectrum descriptors.
 
@@ -221,6 +220,11 @@ class ACE(Descriptor):
             "Am",
         ]
 
+        topfile = cg_coupling.__file__
+        top_dir = topfile.split('/cg')[0]
+        lib_path = '%s' % top_dir
+        self.lib_path = lib_path
+
         self.Wigner_3j = self.init_wigner_3j(
             self.parameters.ace_lmax_traditional
         )
@@ -230,12 +234,15 @@ class ACE(Descriptor):
         )
 
         self.ncols0 = 3
+        self.couplings = None
 
+        assert not self.parameters.ace_types_like_snap, "Using the same 'element' type for atoms and grid points is not permitted for standar d mala models"
         if self.parameters.ace_types_like_snap and "G" in self.parameters.ace_elements:
             raise Exception("for types_like_snap = True, you must remove the separate element type for grid points")
 
         if len(self.parameters.ace_elements) != len(self.parameters.ace_reference_ens):
             raise Exception("Reference ensemble must match length of element list!")
+
 
     @property
     def data_name(self):
@@ -336,7 +343,11 @@ class ACE(Descriptor):
         nz = self.grid_dimensions[2]
 
         # calculate the coupling coefficients
-        coupling_coeffs = self.calculate_coupling_coeffs()
+        if self.couplings != None:
+            coupling_coeffs = self.couplings
+        else:
+            self.couplings = self.calculate_coupling_coeffs()
+            coupling_coeffs = self.couplings
         # save the coupling coefficients
         # saving function will go here
 
@@ -365,22 +376,37 @@ class ACE(Descriptor):
         # What that is differs depending on serial/parallel execution.
         if self.parameters.lammps_compute_file == "":
             filepath = __file__.split("ace")[0]
-            print('filepath in ace desc script',filepath)
-            if self.parameters._configuration["mpi"]:
-                if self.parameters.use_z_splitting:
-                    self.parameters.lammps_compute_file = os.path.join(
-                        filepath, "in.acegridlocal.python"
-                    )
+            #print('filepath in ace desc script',filepath)
+            if not self.parameters.ace_types_like_snap:
+                if self.parameters._configuration["mpi"]:
+                    if self.parameters.use_z_splitting:
+                        self.parameters.lammps_compute_file = os.path.join(
+                            filepath, "in.acegridlocal.python"
+                        )
+                    else:
+                        self.parameters.lammps_compute_file = os.path.join(
+                            filepath, "in.acegridlocal_defaultproc.python"
+                        )
                 else:
                     self.parameters.lammps_compute_file = os.path.join(
-                        filepath, "in.acegridlocal_defaultproc.python"
+                        filepath, "in.acegrid.python"
                     )
-            else:
-                self.parameters.lammps_compute_file = os.path.join(
-                    filepath, "in.acegrid.python"
-                )
+            if self.parameters.ace_types_like_snap:
+                if self.parameters._configuration["mpi"]:
+                    if self.parameters.use_z_splitting:
+                        self.parameters.lammps_compute_file = os.path.join(
+                            filepath, "in.acegridlocal_s.python"
+                        )
+                    else:
+                        self.parameters.lammps_compute_file = os.path.join(
+                            filepath, "in.acegridlocal_defaultproc_s.python"
+                        )
+                else:
+                    self.parameters.lammps_compute_file = os.path.join(
+                        filepath, "in.acegrid_s.python"
+                    )
         # Do the LAMMPS calculation and clean up.
-        print('file %s' % self.parameters.lammps_compute_file)
+        #print('file %s' % self.parameters.lammps_compute_file)
         lmp.file(self.parameters.lammps_compute_file)
 
         # Set things not accessible from LAMMPS
@@ -399,11 +425,13 @@ class ACE(Descriptor):
         # NOTE: we now handle this later while setting the coupling_coefficients
         #       (the coupling coefficients specify wich fingerprints are evaluated
         #        in lammps directly)
-        # self.fingerprint_length = (
-        #    ncols0 + self._calculate_ace_fingerprint_length()
+        #self.fingerprint_length = (
+        #    self.ncols0 + self._calculate_ace_fingerprint_length()
         # )
+        #if self.couplings == None:
+        #    self.couplings = self.calculate_coupling_coeffs()
         # printout("Fingerprint length = ", self.fingerprint_length)
-
+        self.couplings = self.calculate_coupling_coeffs()
         # Extract data from LAMMPS calculation.
         # This is different for the parallel and the serial case.
         # In the serial case we can expect to have a full bispectrum array at
@@ -506,6 +534,7 @@ class ACE(Descriptor):
         ) = self.get_default_settings()
 
         rcutfac = [float(k) for k in rc_default.split()[2:]]
+        #print('rcutfacs',rcutfac)
         self.maxrc = np.max(
             rcutfac
         )  # set radial cutoff based on automatically generated ACE cutoffs
@@ -513,7 +542,7 @@ class ACE(Descriptor):
         assert len(self.bonds) == len(rcutfac) and len(self.bonds) == len(
             lmbda
         ), "you must have rcutfac and lmbda defined for each bond type"
-        printout("global max cutoff (angstrom)", max(rcutfac))
+        #printout("global max cutoff (angstrom)", max(rcutfac))
         rcinner = [0.0] * len(self.bonds)
         drcinner = [0.0] * len(self.bonds)
 
@@ -551,8 +580,6 @@ class ACE(Descriptor):
         nus, limit_nus = self.calc_limit_nus()
 
         if not self.parameters.ace_types_like_snap:
-            #self.fingerprint_length = self.ncols0 + len(limit_nus) 
-            #!TODO verify that this fixes desc count mismatch from mala
             self.fingerprint_length = self.ncols0 + len(limit_nus) - (len(self.parameters.ace_elements)-1)
             # permutation symmetry adapted ACE labels
             Apot = AcePot(
@@ -664,9 +691,9 @@ class ACE(Descriptor):
                 if self.parameters.ace_padfunc:
                     for muii in musins:
                         limit_nus.append(byattyp["%d" % muii][0])
-        printout(
-            "all basis functions", len(nus), "grid subset", len(limit_nus)
-        )
+        #printout(
+        #    "all basis functions", len(nus), "grid subset", len(limit_nus)
+        #)
 
         return nus, limit_nus
 
@@ -809,7 +836,7 @@ class ACE(Descriptor):
     def init_wigner_3j(self, lmax):
         # returns dictionary of all cg coefficients to be used at a given value of lmax
         try:
-            with open('wig.pkl','rb') as readinwig:
+            with open('%s/wig.pkl' % self.lib_path,'rb') as readinwig:
                 cg = pickle.load(readinwig)
         except FileNotFoundError:
             cg = {}
@@ -830,14 +857,14 @@ class ACE(Descriptor):
                                     cg[key] = self.wigner_3j(
                                         l1, m1, l2, m2, l3, m3
                                     )
-            with open('wig.pkl','wb') as writewig:
+            with open('%s/wig.pkl' % self.lib_path,'wb') as writewig:
                 pickle.dump(cg,writewig)
         return cg
 
     def init_clebsch_gordan(self, lmax):
         # returns dictionary of all cg coefficients to be used at a given value of lmax
         try:
-            with open('cg.pkl','rb') as readincg:
+            with open('%s/cg.pkl' % self.lib_path,'rb') as readincg:
                 cg = pickle.load(readincg)
         except FileNotFoundError:
             cg = {}
@@ -858,7 +885,7 @@ class ACE(Descriptor):
                                     cg[key] = self.clebsch_gordan(
                                         l1, m1, l2, m2, l3, m3
                                     )
-            with open('cg.pkl','wb') as writecg:
+            with open('%s/cg.pkl' % self.lib_path,'wb') as writecg:
                 pickle.dump(cg, writecg)
             #pickle.dump(cg,'cg.pkl')
         return cg

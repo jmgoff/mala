@@ -6,6 +6,13 @@ import numpy as np
 
 from mala.common.parameters import DEFAULT_NP_DATA_DTYPE
 
+# for debugging
+def mask_A(A,tol=12):
+    A=A.round(16)
+    A[A > (10**tol)] = 0
+    A[A < -(10**tol)] = 0
+    A = np.nan_to_num(A,nan=0,posinf=0,neginf=0)
+    return A
 
 def set_cmdlinevars(cmdargs, argdict):
     """
@@ -77,6 +84,7 @@ def extract_compute_np(
             ptr, ctypes.POINTER(ctypes.c_double * total_size)
         )
         array_np = np.frombuffer(buffer_ptr.contents, dtype=float)
+        array_np = mask_A(array_np)
         array_np.shape = array_shape
         # If I directly return the descriptors, this sometimes leads
         # to errors, because presumably the python garbage collection

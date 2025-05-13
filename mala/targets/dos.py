@@ -15,6 +15,7 @@ from mala.targets.calculation_helpers import (
     fermi_function,
     gaussians,
     analytical_integration,
+    analytical_integration_weights,
     get_beta,
     entropy_multiplicator,
 )

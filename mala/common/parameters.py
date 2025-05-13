@@ -9,6 +9,7 @@ from time import sleep
 
 import numpy as np
 import torch
+torch.set_num_threads(1)
 import torch.distributed as dist
 
 from mala.common.parallelizer import (

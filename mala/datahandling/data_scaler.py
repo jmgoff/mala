@@ -3,6 +3,7 @@
 import pickle
 import numpy as np
 import torch
+torch.set_num_threads(1)
 import torch.distributed as dist
 
 from mala.common.parameters import printout
@@ -111,7 +112,7 @@ class DataScaler:
 
                         old_mean = self.means
                         old_std = self.stds
-
+                        #print('old mean',old_mean,'new_mean',new_mean)
                         if list(self.means.size())[0] > 0:
                             self.means = (
                                 self.total_data_count
@@ -123,6 +124,7 @@ class DataScaler:
                             )
                         else:
                             self.means = new_mean
+                        self.means = np.nan_to_num(self.means,nan=0.0)
                         if list(self.stds.size())[0] > 0:
                             self.stds = (
                                 self.total_data_count
@@ -140,6 +142,7 @@ class DataScaler:
                             self.stds = torch.sqrt(self.stds)
                         else:
                             self.stds = new_std
+                        self.stds = np.nan_to_num(self.stds,nan=0.0)
                         self.total_data_count += current_data_count
 
                     if self.scale_normal:
