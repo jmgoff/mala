@@ -432,8 +432,7 @@ class ACE(Descriptor):
         #    self.couplings = self.calculate_coupling_coeffs()
         # printout("Fingerprint length = ", self.fingerprint_length)
         self.couplings = self.calculate_coupling_coeffs()
-        lmp.file(self.parameters.lammps_compute_file)
-
+        #lmp.file(self.parameters.lammps_compute_file)
         # Extract data from LAMMPS calculation.
         # This is different for the parallel and the serial case.
         # In the serial case we can expect to have a full bispectrum array at
@@ -559,8 +558,11 @@ class ACE(Descriptor):
 
         nus, limit_nus = self.calc_limit_nus()
 
+        #grab largest of nmax or nradbase (default) to define max radial basis functions to enumerate
+        max_n_base = int(np.amax([np.amax(self.parameters.ace_nmax),self.parameters.ace_nradbase]))
         if not self.parameters.ace_types_like_snap:
             self.fingerprint_length = self.ncols0 + len(limit_nus) - (len(self.parameters.ace_elements)-1)
+        
             # permutation symmetry adapted ACE labels
             Apot = AcePot(
                 self.parameters.ace_elements,
@@ -568,7 +570,8 @@ class ACE(Descriptor):
                 self.parameters.ace_ranks,
                 self.parameters.ace_nmax,
                 self.parameters.ace_lmax,
-                self.parameters.ace_nradbase,
+                #self.parameters.ace_nradbase,
+                max_n_base,
                 rcutfac,
                 lmbda,
                 rcinner,
@@ -591,6 +594,8 @@ class ACE(Descriptor):
                 self.parameters.ace_ranks,
                 self.parameters.ace_nmax,
                 self.parameters.ace_lmax,
+                max_n_base,
+                #self.parameters.ace_nradbase,
                 self.parameters.ace_nradbase,
                 rcutfac,
                 lmbda,
